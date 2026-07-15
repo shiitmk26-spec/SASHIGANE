@@ -9,8 +9,8 @@ db.init_db()
 
 st.title("📊 SASHIGANE データ蓄積システム")
 st.caption(
-    "GLMM用テストデータのExcelファイル（1行目: 日本語ラベル、2行目: 英語キー、3行目以降: データ）を"
-    "アップロードすると、SQLiteデータベースに蓄積されます。"
+    "GLMM用テストデータのExcelファイル（「テスト名」行、日本語ラベル行、英語キー行の順で始まり、"
+    "その後にデータが続く形式）をアップロードすると、SQLiteデータベースに蓄積されます。"
 )
 
 uploaded_files = st.file_uploader(
@@ -54,15 +54,19 @@ records = db.fetch_all_records()
 st.metric("総レコード数", len(records))
 
 if not records.empty:
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        learners = st.multiselect("学習者IDで絞り込み", sorted(records["learner_id"].dropna().unique()))
+        test_names = st.multiselect("テスト名で絞り込み", sorted(records["test_name"].dropna().unique()))
     with col2:
-        items = st.multiselect("テスト項目で絞り込み", sorted(records["item"].dropna().unique()))
+        learners = st.multiselect("学習者IDで絞り込み", sorted(records["learner_id"].dropna().unique()))
     with col3:
+        items = st.multiselect("テスト項目で絞り込み", sorted(records["item"].dropna().unique()))
+    with col4:
         groups = st.multiselect("組織名で絞り込み", sorted(records["group_name"].dropna().unique()))
 
     filtered = records
+    if test_names:
+        filtered = filtered[filtered["test_name"].isin(test_names)]
     if learners:
         filtered = filtered[filtered["learner_id"].isin(learners)]
     if items:
@@ -126,7 +130,7 @@ else:
 st.divider()
 
 st.subheader("GLMM分析可能性チェック")
-st.caption("テスト項目ごとに、GLMM分析に必要なデータ量が揃っているかを確認できます。")
+st.caption("テスト名・テスト項目ごとに、GLMM分析に必要なデータ量が揃っているかを確認できます。")
 
 if not records.empty:
     threshold_col1, threshold_col2 = st.columns(2)
@@ -138,11 +142,11 @@ if not records.empty:
         min_records = st.number_input("最低総レコード数", min_value=1, value=30, step=1)
 
     readiness = (
-        records.groupby("item")
+        records.groupby(["test_name", "item"], dropna=False)
         .agg(総レコード数=("id", "count"), 学習者数=("learner_id", pd.Series.nunique))
         .reset_index()
-        .rename(columns={"item": "テスト項目"})
-        .sort_values("テスト項目")
+        .rename(columns={"test_name": "テスト名", "item": "テスト項目"})
+        .sort_values(["テスト名", "テスト項目"])
     )
     readiness["分析可能"] = (
         (readiness["学習者数"] >= min_learners) & (readiness["総レコード数"] >= min_records)
