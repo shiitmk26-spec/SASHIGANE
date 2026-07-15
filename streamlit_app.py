@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 import db
@@ -77,6 +78,35 @@ if not records.empty:
         file_name="sashigane_accumulated_data.csv",
         mime="text/csv",
     )
+else:
+    st.info("まだデータが蓄積されていません。")
+
+st.divider()
+
+st.subheader("GLMM分析可能性チェック")
+st.caption("テスト項目ごとに、GLMM分析に必要なデータ量が揃っているかを確認できます。")
+
+if not records.empty:
+    threshold_col1, threshold_col2 = st.columns(2)
+    with threshold_col1:
+        min_learners = st.number_input(
+            "最低学習者数（ランダム効果のグループ数）", min_value=1, value=10, step=1
+        )
+    with threshold_col2:
+        min_records = st.number_input("最低総レコード数", min_value=1, value=30, step=1)
+
+    readiness = (
+        records.groupby("item")
+        .agg(総レコード数=("id", "count"), 学習者数=("learner_id", pd.Series.nunique))
+        .reset_index()
+        .rename(columns={"item": "テスト項目"})
+        .sort_values("テスト項目")
+    )
+    readiness["分析可能"] = (
+        (readiness["学習者数"] >= min_learners) & (readiness["総レコード数"] >= min_records)
+    ).map({True: "✅ 分析可能", False: "❌ データ不足"})
+
+    st.dataframe(readiness, use_container_width=True, hide_index=True)
 else:
     st.info("まだデータが蓄積されていません。")
 
