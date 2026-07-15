@@ -83,6 +83,48 @@ else:
 
 st.divider()
 
+st.subheader("地域比較データ出力")
+st.caption(
+    "選んだ値を「対象」、それ以外を「その他」として分類したデータを出力できます"
+    "（例: 都道府県で「東京」を選ぶと、東京 vs その他都府県で比較できます）。"
+)
+
+if not records.empty:
+    compare_col1, compare_col2 = st.columns(2)
+    with compare_col1:
+        compare_field = st.selectbox(
+            "比較する項目",
+            ["pref", "region"],
+            format_func=lambda x: {"pref": "都道府県", "region": "地域VS"}[x],
+        )
+    with compare_col2:
+        compare_options = sorted(records[compare_field].dropna().unique())
+        target_value = st.selectbox("対象にする値", compare_options) if compare_options else None
+
+    if target_value is not None:
+        comparison_df = records.copy()
+        comparison_df["比較グループ"] = comparison_df[compare_field].apply(
+            lambda v: target_value if v == target_value else "その他"
+        )
+
+        comparison_summary = (
+            comparison_df.groupby("比較グループ")
+            .agg(総レコード数=("id", "count"), 学習者数=("learner_id", pd.Series.nunique))
+            .reset_index()
+        )
+        st.dataframe(comparison_summary, use_container_width=True, hide_index=True)
+
+        st.download_button(
+            f"「{target_value} vs その他」で分類したデータをCSVでダウンロード",
+            data=comparison_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"sashigane_comparison_{target_value}_vs_other.csv",
+            mime="text/csv",
+        )
+else:
+    st.info("まだデータが蓄積されていません。")
+
+st.divider()
+
 st.subheader("GLMM分析可能性チェック")
 st.caption("テスト項目ごとに、GLMM分析に必要なデータ量が揃っているかを確認できます。")
 
